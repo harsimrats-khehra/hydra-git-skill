@@ -1,2 +1,3 @@
-print("Starting application...")
-result = data_payload + 100
+def checkout():
+    if item_count > 0
+        print("Processing buy order...")
