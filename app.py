@@ -7,6 +7,23 @@ from diff_match_patch import diff_match_patch
 def run_git_cmd(args):
     return subprocess.run(args, capture_output=True, text=True)
 
+def clean_model_output(raw_text):
+    """Safely extracts clean code from markdown wrappers without string conversion crashes."""
+    if not raw_text:
+        return ""
+    
+    # Handle standard triple backtick python wrappers safely
+    if "```python" in raw_text:
+        parts = raw_text.split("```python")
+        if len(parts) > 1:
+            raw_text = parts[1].split("```")[0]
+    elif "```" in raw_text:
+        parts = raw_text.split("```")
+        if len(parts) > 1:
+            raw_text = parts[1].split("```")[0]
+            
+    return raw_text.strip()
+
 def generate_visual_html_diff(old_text, new_text):
     dmp = diff_match_patch()
     diffs = dmp.diff_main(old_text, new_text)
@@ -55,12 +72,10 @@ def complete_agent_pipeline(file_name, error_stack):
             
             prompt = f"Fix this script code. SOURCE:\n{current_code}\n\nERROR:\n{current_error}\n\nOutput ONLY valid code inside blocks. No conversational text."
             response = ollama.chat(model='llama3.2', messages=[{'role': 'user', 'content': prompt}])
-            cleaned_code = response['message']['content']
+            raw_output = response['message']['content']
             
-            if "```python" in cleaned_code:
-                cleaned_code = cleaned_code.split("```python").split("```").strip()
-            elif "```" in cleaned_code:
-                cleaned_code = cleaned_code.split("```").split("```").strip()
+            # Use our clean, bulletproof parsing function 
+            cleaned_code = clean_model_output(raw_output)
                 
             with open(file_name, "w", encoding="utf-8") as f:
                 f.write(cleaned_code)
@@ -79,7 +94,7 @@ def complete_agent_pipeline(file_name, error_stack):
             run_git_cmd(["git", "checkout", "main"])
             return f"❌ **Self-Healing Failed.**\n\nLogs:\n" + "\n".join(loop_logs), ""
             
-        # 🧠 NEW WINNING FEATURE: Generate an Explanatory Commit Message via AI
+        # Generate an Explanatory Commit Message via AI
         commit_prompt = f"Write a 1-sentence engineering git commit message explaining how you fixed this error: {error_stack}. Keep it short and under 60 characters. Do not include quotes."
         commit_response = ollama.chat(model='llama3.2', messages=[{'role': 'user', 'content': commit_prompt}])
         ai_commit_msg = f"fix(hydra): {commit_response['message']['content'].strip()}"
@@ -100,7 +115,7 @@ def complete_agent_pipeline(file_name, error_stack):
         run_git_cmd(["git", "checkout", "main"])
         return f"❌ System Architecture Pipeline Crash: {str(e)}", ""
 
-# Assemble the UI canvas frame
+# Assemble the layout
 with gr.Blocks(theme=gr.themes.Soft()) as demo:
     gr.Markdown("# 🧬 Hydra-Git: Autonomous Self-Healing Developer Dashboard")
     gr.Markdown("*Compliant with Open-Agent Standard architectures running 100% locally via Llama 3.2 (3B) with Visual Diff Analyzers.*")
