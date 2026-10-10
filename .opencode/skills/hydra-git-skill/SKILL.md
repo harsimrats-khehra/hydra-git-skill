@@ -1,22 +1,22 @@
 ---
 name: hydra-git-skill
-description: Universally isolates, diagnoses, and compiles code changes asynchronously across multiple programming languages (Python, JS, Java, C, C++, Rust, Go) completely offline using multi-pass self-healing execution loops.
+description: Universally isolates, diagnoses, and repairs bugs across local Git repositories or code sandboxes using safe temporary worktrees and local AI inference loops.
 license: MIT
-compatibility: ollama-llama3.2, git, python3.10+, gcc, node, rustc, go
+compatibility: ollama, git, python3.10+, node, gcc, cargo, go
 ---
 
-# Hydra-Git Polyglot Task Protocol
+# Hydra-Git Task Protocol
 
 ## Intended Triggers
-- "Fix code anomalies and check syntax execution streams"
-- "Deploy the self-healing worker agent over a target development file"
-- "Auto-correct script logs using native runtime compiler engines completely offline"
+- "Deploy isolated worktree repairs over a target codebase directory"
+- "Fix a bug in a local repository without changing my current branch state"
+- "Auto-correct syntax or run unit tests on a sandbox layout completely offline"
 
 ## Instructions
-1. Securely checkpoint the uncommitted local staging code variations on the foreground environment.
-2. Initialize an isolated worker branch configuration track prefixed with `hydra/ghost-patch-fix`.
-3. Intercept the language selection dropdown profiles, source array syntax scripts, and crash telemetry records downstream inside the unified runtime layer of `app.py`.
-4. Route the model output string metrics to language-specific syntax validation engines (`py_compile`, `node`, `javac`, `gcc`, `g++`, `rustc`, or `go build`).
-5. Run multi-pass error correction recursively up to 3 separate cycles until the local compiler provides a successful return code validation flag.
-6. Auto-generate human-readable Git log commit tracking summaries using the local `llama3.2` model parameters.
-7. Safely restore the primary tracking repository main checkout line seamlessly without user interface disruptions.
+1. Inspect the incoming request parameters to dynamically choose between Workflow A (Text Sandbox Canvas) or Workflow B (Local Git Repository Engine).
+2. For Workflow B, validate the directory root and ensure the target framework matches supported language parameters (`Python`, `JavaScript`, `Java`, `C`, `C++`, `Go`, `Rust`).
+3. Spawns an isolated Git Worktree in the host computer's temporary cache folder (`tempfile`). This guarantees the user's active editor files remain entirely safe and untouched.
+4. Route context parameters to the configurable local Ollama model instance to parse minimal code diff modifications.
+5. Execute targeted compilation validation checks and custom user-provided verification shell commands.
+6. Return high-fidelity verification signals: `Syntax Valid`, `Tests Passed`, `Tests Failed`, or `Not Verified`.
+7. Auto-author descriptive Git commit updates using the AI model, and instruct the user on how to cleanly review or merge the patch branch when ready.
