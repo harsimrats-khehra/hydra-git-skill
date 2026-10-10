@@ -18,7 +18,7 @@ An offline, open-source AI developer agent framework that listens to terminal ru
 
 1. **Clone the Core Workspace Artifacts:**
    ```bash
-   git clone https://github.com
+   git clone https://github.com/harsimrats-khehra/hydra-git-skill.git
    cd hydra-git-skill
    ```
 2. **Boot the AI Model Backbone Server:**
