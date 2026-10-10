@@ -2,114 +2,116 @@ import os
 import subprocess
 import gradio as gr
 import ollama
+from diff_match_patch import diff_match_patch
 
 def run_git_cmd(args):
     return subprocess.run(args, capture_output=True, text=True)
 
+def generate_visual_html_diff(old_text, new_text):
+    """Generates clean side-by-side HTML markers highlighting added/deleted lines."""
+    dmp = diff_match_patch()
+    diffs = dmp.diff_main(old_text, new_text)
+    dmp.diff_cleanupSemantic(diffs)
+    
+    html_output = []
+    for op, data in diffs:
+        text = data.replace('\n', '<br>').replace(' ', '&nbsp;')
+        if op == 1: # Added content code bits
+            html_output.append(f"<span style='background-color: #2ea44f33; color: #22863a; font-weight: bold;'>{text}</span>")
+        elif op == -1: # Deleted content code bits
+            html_output.append(f"<span style='background-color: #cb243133; color: #cb2431; text-decoration: line-through;'>{text}</span>")
+        else:
+            html_output.append(f"<span style='color: #24292e;'>{text}</span>")
+            
+    return f"<div style='font-family: monospace; font-size: 14px; background: #f6f8fa; padding: 15px; border-radius: 6px; border: 1px solid #e1e4e8; white-space: pre-wrap;'>{''.join(html_output)}</div>"
+
 def check_syntax_errors(file_name):
-    """Compiles the file in a separate process to check for syntax crashes."""
-    # Runs python compilation check (-m py_compile) to catch syntax bugs without executing full logic
     result = subprocess.run(["python", "-m", "py_compile", file_name], capture_output=True, text=True)
     if result.returncode != 0:
-        return False, result.stderr # Returns validation fail status + stack trace error logs
+        return False, result.stderr
     return True, "No syntax issues found."
 
 def complete_agent_pipeline(file_name, error_stack):
     if not file_name or not os.path.exists(file_name):
-        return "❌ Error: Please provide a valid file path inside this folder."
+        return "❌ Error: Invalid workspace file pathway input context.", ""
         
     try:
-        # 1. Clean workspace variables & reset branch states safely
         run_git_cmd(["git", "checkout", "-B", "main"])
         run_git_cmd(["git", "add", "."])
-        run_git_cmd(["git", "commit", "-m", "chore: pre-audit checkpoint auto-save"])
+        run_git_cmd(["git", "commit", "-m", "chore: dashboard auto-save"])
         
-        # 2. Re-create the isolated background ghost branch tracking engine
         run_git_cmd(["git", "branch", "-D", "hydra/ghost-patch-fix"])
         run_git_cmd(["git", "checkout", "-b", "hydra/ghost-patch-fix"])
         
-        # 3. Read raw broken target module data
         with open(file_name, "r", encoding="utf-8") as f:
-            broken_source = f.read()
+            original_code = f.read()
             
-        current_code = broken_source
+        current_code = original_code
         current_error = error_stack
         max_attempts = 3
         loop_logs = []
         
-        # 🧠 CORE SELF-HEALING AUTOMATION LOOP STACK
         for attempt in range(1, max_attempts + 1):
-            loop_logs.append(f"🔄 **Attempt {attempt}/{max_attempts}:** Sending patch request to local Llama 3.2...")
+            loop_logs.append(f"🔄 **Attempt {attempt}/{max_attempts}:** Generating patches via Llama 3.2...")
             
-            prompt = f"""
-            You are an elite automated DevOps developer. Fix this script.
-            
-            SOURCE CODE MODULE:
-            {current_code}
-            
-            CRASH ERROR:
-            {current_error}
-            
-            INSTRUCTION: Fix the bug. Output ONLY the raw executable python script code. No conversational text introduction or conclusion blocks.
-            """
-            
+            prompt = f"Fix this script code. SOURCE:\n{current_code}\n\nERROR:\n{current_error}\n\nOutput ONLY valid code inside blocks. No conversational text."
             response = ollama.chat(model='llama3.2', messages=[{'role': 'user', 'content': prompt}])
             cleaned_code = response['message']['content']
             
-            # Remove potential markdown layout block text wrappers safely
             if "```python" in cleaned_code:
                 cleaned_code = cleaned_code.split("```python")[1].split("```")[0].strip()
             elif "```" in cleaned_code:
                 cleaned_code = cleaned_code.split("```")[1].split("```")[0].strip()
                 
-            # Write out the temporary code attempt to the file grid
             with open(file_name, "w", encoding="utf-8") as f:
                 f.write(cleaned_code)
                 
-            # 4. Trigger Internal Compiler Self-Healing Test Suite
             is_valid, compilation_log = check_syntax_errors(file_name)
             
             if is_valid:
-                loop_logs.append(f"✅ **Attempt {attempt} Passed Compilation!** Code verified successfully.")
+                loop_logs.append(f"✅ **Attempt {attempt} Passed Compilation Checks!**")
                 current_code = cleaned_code
                 break
             else:
-                loop_logs.append(f"⚠️ **Attempt {attempt} Failed Syntax Compilation Check.** Refeeding new error logs to agent...")
+                loop_logs.append(f"⚠️ **Attempt {attempt} Failed Syntax Validation.** Retrying...")
                 current_code = cleaned_code
                 current_error = compilation_log
         else:
-            # Executes if all 3 self-healing loop cycles fail verification tests
             run_git_cmd(["git", "checkout", "main"])
-            logs_summary = "\n".join(loop_logs)
-            return f"❌ **Self-Healing Failed:** The agent could not solve the syntax error after 3 attempts.\n\n### Execution Logs:\n{logs_summary}"
+            return f"❌ **Self-Healing Failed.**\n\nLogs:\n" + "\n".join(loop_logs), ""
             
-        # 5. Commit verified clean patch changes and restore main fork
         run_git_cmd(["git", "add", file_name])
-        run_git_cmd(["git", "commit", "-m", "feat(hydra): verified self-healing patch execution complete"])
+        run_git_cmd(["git", "commit", "-m", "feat(hydra): verified self-healing visual code patch complete"])
         run_git_cmd(["git", "checkout", "main"])
         
+        # Calculate visual HTML highlight changes diff tracking map metrics
+        visual_diff_html = generate_visual_html_diff(original_code, current_code)
         formatted_logs = "\n".join(loop_logs)
-        return f"### 🚀 SYSTEM SUCCESS STATUS\nVerified clean code changes committed seamlessly in the background.\n\n### 📋 Self-Healing Evaluation Telemetry:\n{formatted_logs}\n\n### 💻 Newly Corrected Output:\n```python\n{current_code}\n```"
+        
+        telemetry_report = f"### 🚀 SYSTEM SUCCESS STATUS\nVerified clean code changes committed seamlessly in the background.\n\n### 📋 Telemetry Logs:\n{formatted_logs}"
+        return telemetry_report, visual_diff_html
         
     except Exception as e:
         run_git_cmd(["git", "checkout", "main"])
-        return f"❌ System Architecture Pipeline Crash: {str(e)}"
+        return f"❌ System Architecture Pipeline Crash: {str(e)}", ""
 
-# Assemble the UI Interface presentation canvas
+# Assemble the upgraded dual-stream presentation UI frame
 with gr.Blocks(theme=gr.themes.Soft()) as demo:
     gr.Markdown("# 🧬 Hydra-Git: Autonomous Self-Healing Developer Dashboard")
-    gr.Markdown("*Compliant with Open-Agent Standard architectures running 100% locally via Llama 3.2 (3B).*")
+    gr.Markdown("*Compliant with Open-Agent Standards running 100% locally via Llama 3.2 (3B) with Visual Diff Analyzers.*")
     
     with gr.Row():
-        with gr.Column():
+        with gr.Column(scale=1):
             input_file = gr.Textbox(label="Target Workspace Code Module Path", value="app_module.py")
             input_error = gr.Textbox(label="Initial Crash Telemetry / Stack Error Trace", placeholder="e.g., NameError: name 'data_payload' is not defined")
             submit_btn = gr.Button("Deploy Self-Healing Worker Agent", variant="primary")
+            output_telemetry = gr.Markdown(label="Real-time Compilation Audit Streams")
         
-        with gr.Column():
-            output_display = gr.Markdown(label="Real-time Compilation Audit Streams")
+        with gr.Column(scale=2):
+            gr.Markdown("### 🔍 Live AI Visual Code Diff Analyzer (Green = Insertions, Red = Deletions)")
+            output_diff = gr.HTML(label="Visual Code Patch Telemetry Structure Map")
             
-    submit_btn.click(fn=complete_agent_pipeline, inputs=[input_file, input_error], outputs=output_display)
+    submit_btn.click(fn=complete_agent_pipeline, inputs=[input_file, input_error], outputs=[output_telemetry, output_diff])
 
 if __name__ == "__main__":
     demo.launch()
