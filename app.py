@@ -8,11 +8,8 @@ def run_git_cmd(args):
     return subprocess.run(args, capture_output=True, text=True)
 
 def clean_model_output(raw_text):
-    """Safely extracts clean code from markdown wrappers without string conversion crashes."""
     if not raw_text:
         return ""
-    
-    # Handle standard triple backtick python wrappers safely
     if "```python" in raw_text:
         parts = raw_text.split("```python")
         if len(parts) > 1:
@@ -47,21 +44,22 @@ def check_syntax_errors(file_name):
         return False, result.stderr
     return True, "No syntax issues found."
 
-def complete_agent_pipeline(file_name, error_stack):
-    if not file_name or not os.path.exists(file_name):
-        return "❌ Error: Invalid workspace file pathway input context.", ""
-        
+def complete_agent_pipeline(sandbox_code, error_stack):
+    file_name = "app_module.py"
+    
     try:
+        # 🧠 WRITE SANDBOX BROWSER TEXT CODE DIRECTLY TO THE TEST MODULE FILE
+        with open(file_name, "w", encoding="utf-8") as f:
+            f.write(sandbox_code)
+            
         run_git_cmd(["git", "checkout", "-B", "main"])
         run_git_cmd(["git", "add", "."])
-        run_git_cmd(["git", "commit", "-m", "chore: dashboard auto-save"])
+        run_git_cmd(["git", "commit", "-m", "chore: dashboard sandbox auto-save"])
         
         run_git_cmd(["git", "branch", "-D", "hydra/ghost-patch-fix"])
         run_git_cmd(["git", "checkout", "-b", "hydra/ghost-patch-fix"])
         
-        with open(file_name, "r", encoding="utf-8") as f:
-            original_code = f.read()
-            
+        original_code = sandbox_code
         current_code = original_code
         current_error = error_stack
         max_attempts = 3
@@ -74,7 +72,6 @@ def complete_agent_pipeline(file_name, error_stack):
             response = ollama.chat(model='llama3.2', messages=[{'role': 'user', 'content': prompt}])
             raw_output = response['message']['content']
             
-            # Use our clean, bulletproof parsing function 
             cleaned_code = clean_model_output(raw_output)
                 
             with open(file_name, "w", encoding="utf-8") as f:
@@ -94,15 +91,12 @@ def complete_agent_pipeline(file_name, error_stack):
             run_git_cmd(["git", "checkout", "main"])
             return f"❌ **Self-Healing Failed.**\n\nLogs:\n" + "\n".join(loop_logs), ""
             
-        # Generate an Explanatory Commit Message via AI
         commit_prompt = f"Write a 1-sentence engineering git commit message explaining how you fixed this error: {error_stack}. Keep it short and under 60 characters. Do not include quotes."
         commit_response = ollama.chat(model='llama3.2', messages=[{'role': 'user', 'content': commit_prompt}])
         ai_commit_msg = f"fix(hydra): {commit_response['message']['content'].strip()}"
         
-        # Commit with the highly descriptive AI generated summary
         run_git_cmd(["git", "add", file_name])
         run_git_cmd(["git", "commit", "-m", ai_commit_msg])
-        
         run_git_cmd(["git", "checkout", "main"])
         
         visual_diff_html = generate_visual_html_diff(original_code, current_code)
@@ -115,23 +109,30 @@ def complete_agent_pipeline(file_name, error_stack):
         run_git_cmd(["git", "checkout", "main"])
         return f"❌ System Architecture Pipeline Crash: {str(e)}", ""
 
-# Assemble the layout
+# Assemble the layout frame with an Interactive Code Input Box Sandbox
 with gr.Blocks(theme=gr.themes.Soft()) as demo:
     gr.Markdown("# 🧬 Hydra-Git: Autonomous Self-Healing Developer Dashboard")
-    gr.Markdown("*Compliant with Open-Agent Standard architectures running 100% locally via Llama 3.2 (3B) with Visual Diff Analyzers.*")
+    gr.Markdown("*Compliant with Open-Agent Standard architectures running 100% locally via Llama 3.2 (3B) with Live Code Sandbox Inputs.*")
     
     with gr.Row():
         with gr.Column(scale=1):
-            input_file = gr.Textbox(label="Target Workspace Code Module Path", value="app_module.py")
-            input_error = gr.Textbox(label="Initial Crash Telemetry / Stack Error Trace", placeholder="e.g., NameError: name 'data_payload' is not defined")
+            input_code = gr.Textbox(
+                label="💻 Live Sandbox Code Editor (Type or Change Your Problem Here)", 
+                lines=8, 
+                value='print("Starting application...")\nresult = data_payload + 100'
+            )
+            input_error = gr.Textbox(
+                label="🚨 Initial Crash Telemetry / Stack Error Trace", 
+                value="NameError: name 'data_payload' is not defined"
+            )
             submit_btn = gr.Button("Deploy Self-Healing Worker Agent", variant="primary")
             output_telemetry = gr.Markdown(label="Real-time Compilation Audit Streams")
         
-        with gr.Column(scale=2):
+        with gr.Column(scale=1):
             gr.Markdown("### 🔍 Live AI Visual Code Diff Analyzer (Green = Insertions, Red = Deletions)")
             output_diff = gr.HTML(label="Visual Code Patch Telemetry Structure Map")
             
-    submit_btn.click(fn=complete_agent_pipeline, inputs=[input_file, input_error], outputs=[output_telemetry, output_diff])
+    submit_btn.click(fn=complete_agent_pipeline, inputs=[input_code, input_error], outputs=[output_telemetry, output_diff])
 
 if __name__ == "__main__":
     demo.launch()
