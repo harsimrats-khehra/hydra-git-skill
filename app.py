@@ -4,21 +4,31 @@ import gradio as gr
 import ollama
 from diff_match_patch import diff_match_patch
 
+# DYNAMIC TARGET PROGRAMMING LANGUAGE COMPILER AND REGISTRY PROFILES
+LANGUAGE_REGISTRY = {
+    "Python": {"extension": ".py", "cmd": ["python", "-m", "py_compile"]},
+    "JavaScript": {"extension": ".js", "cmd": ["node", "--check"]},
+    "Java": {"extension": ".java", "cmd": ["javac"]},
+    "C": {"extension": ".c", "cmd": ["gcc", "-fsyntax-only"]},
+    "C++": {"extension": ".cpp", "cmd": ["g++", "-fsyntax-only"]},
+    "Rust": {"extension": ".rs", "cmd": ["rustc", "--edition=2021", "-Zno-codegen"]},
+    "Go": {"extension": ".go", "cmd": ["go", "build", "-o", "nul"]} # Windows safe dev/null alternate output track
+}
+
 def run_git_cmd(args):
     return subprocess.run(args, capture_output=True, text=True)
 
 def clean_model_output(raw_text):
     if not raw_text:
         return ""
-    if "```python" in raw_text:
-        parts = raw_text.split("```python")
-        if len(parts) > 1:
-            raw_text = parts[1].split("```")[0]
-    elif "```" in raw_text:
+    if "```" in raw_text:
         parts = raw_text.split("```")
+        for part in parts:
+            lines = part.strip().split('\n')
+            if len(lines) > 1 and not lines[0].isalpha():
+                return part.replace(lines[0], "", 1).strip()
         if len(parts) > 1:
-            raw_text = parts[1].split("```")[0]
-            
+            return parts[1].strip()
     return raw_text.strip()
 
 def generate_visual_html_diff(old_text, new_text):
@@ -38,23 +48,28 @@ def generate_visual_html_diff(old_text, new_text):
             
     return f"<div style='font-family: monospace; font-size: 14px; background: #f6f8fa; padding: 15px; border-radius: 6px; border: 1px solid #e1e4e8; white-space: pre-wrap;'>{''.join(html_output)}</div>"
 
-def check_syntax_errors(file_name):
-    result = subprocess.run(["python", "-m", "py_compile", file_name], capture_output=True, text=True)
+def check_syntax_errors(file_name, language):
+    config = LANGUAGE_REGISTRY.get(language, LANGUAGE_REGISTRY["Python"])
+    execution_args = list(config["cmd"]) + [file_name]
+    
+    # Custom adjustments for alternative compiler runtime behaviors if needed
+    result = subprocess.run(execution_args, capture_output=True, text=True)
     if result.returncode != 0:
-        return False, result.stderr
-    return True, "No syntax issues found."
+        error_logs = result.stderr if result.stderr else result.stdout
+        return False, error_logs
+    return True, "Passed compilation verification tests."
 
-def complete_agent_pipeline(sandbox_code, error_stack):
-    file_name = "app_module.py"
+def complete_agent_pipeline(selected_lang, sandbox_code, error_stack):
+    config = LANGUAGE_REGISTRY.get(selected_lang, LANGUAGE_REGISTRY["Python"])
+    file_name = f"app_module{config['extension']}"
     
     try:
-        # 🧠 WRITE SANDBOX BROWSER TEXT CODE DIRECTLY TO THE TEST MODULE FILE
         with open(file_name, "w", encoding="utf-8") as f:
             f.write(sandbox_code)
             
         run_git_cmd(["git", "checkout", "-B", "main"])
         run_git_cmd(["git", "add", "."])
-        run_git_cmd(["git", "commit", "-m", "chore: dashboard sandbox auto-save"])
+        run_git_cmd(["git", "commit", "-m", f"chore: sandbox dashboard compile tracking ({selected_lang})"])
         
         run_git_cmd(["git", "branch", "-D", "hydra/ghost-patch-fix"])
         run_git_cmd(["git", "checkout", "-b", "hydra/ghost-patch-fix"])
@@ -66,34 +81,33 @@ def complete_agent_pipeline(sandbox_code, error_stack):
         loop_logs = []
         
         for attempt in range(1, max_attempts + 1):
-            loop_logs.append(f"🔄 **Attempt {attempt}/{max_attempts}:** Generating patches via Llama 3.2...")
+            loop_logs.append(f"🔄 **Attempt {attempt}/{max_attempts}:** Generating {selected_lang} patches via Llama 3.2...")
             
-            prompt = f"Fix this script code. SOURCE:\n{current_code}\n\nERROR:\n{current_error}\n\nOutput ONLY valid code inside blocks. No conversational text."
+            prompt = f"Fix this {selected_lang} source code. SOURCE:\n{current_code}\n\nERROR:\n{current_error}\n\nOutput ONLY valid code inside block formats. No conversational commentary text."
             response = ollama.chat(model='llama3.2', messages=[{'role': 'user', 'content': prompt}])
-            raw_output = response['message']['content']
             
-            cleaned_code = clean_model_output(raw_output)
+            cleaned_code = clean_model_output(response['message']['content'])
                 
             with open(file_name, "w", encoding="utf-8") as f:
                 f.write(cleaned_code)
                 
-            is_valid, compilation_log = check_syntax_errors(file_name)
+            is_valid, compilation_log = check_syntax_errors(file_name, selected_lang)
             
             if is_valid:
-                loop_logs.append(f"✅ **Attempt {attempt} Passed Compilation Checks!**")
+                loop_logs.append(f"✅ **Attempt {attempt} Passed {selected_lang} Compilation Verification!**")
                 current_code = cleaned_code
                 break
             else:
-                loop_logs.append(f"⚠️ **Attempt {attempt} Failed Syntax Validation.** Retrying...")
+                loop_logs.append(f"⚠️ **Attempt {attempt} Failed Compilation Validation System Checks.** Retrying loop...")
                 current_code = cleaned_code
                 current_error = compilation_log
         else:
             run_git_cmd(["git", "checkout", "main"])
-            return f"❌ **Self-Healing Failed.**\n\nLogs:\n" + "\n".join(loop_logs), ""
+            return f"❌ **Self-Healing Failed.** The agent could not solve the code issues inside 3 cycles.\n\nLogs:\n" + "\n".join(loop_logs), ""
             
         commit_prompt = f"Write a 1-sentence engineering git commit message explaining how you fixed this error: {error_stack}. Keep it short and under 60 characters. Do not include quotes."
         commit_response = ollama.chat(model='llama3.2', messages=[{'role': 'user', 'content': commit_prompt}])
-        ai_commit_msg = f"fix(hydra): {commit_response['message']['content'].strip()}"
+        ai_commit_msg = f"fix(hydra-{selected_lang.lower().replace('+', 'p')}): {commit_response['message']['content'].strip()}"
         
         run_git_cmd(["git", "add", file_name])
         run_git_cmd(["git", "commit", "-m", ai_commit_msg])
@@ -102,20 +116,25 @@ def complete_agent_pipeline(sandbox_code, error_stack):
         visual_diff_html = generate_visual_html_diff(original_code, current_code)
         formatted_logs = "\n".join(loop_logs)
         
-        telemetry_report = f"### 🚀 SYSTEM SUCCESS STATUS\nVerified clean code changes committed seamlessly in the background.\n\n🔒 **AI Generated Commit Log:** `{ai_commit_msg}`\n\n### 📋 Telemetry Logs:\n{formatted_logs}"
+        telemetry_report = f"### 🚀 SYSTEM SUCCESS STATUS ({selected_lang})\nVerified clean patches committed seamlessly into background trees.\n\n🔒 **AI Generated Commit Log:** `{ai_commit_msg}`\n\n### 📋 Telemetry Logs:\n{formatted_logs}"
         return telemetry_report, visual_diff_html
         
     except Exception as e:
         run_git_cmd(["git", "checkout", "main"])
         return f"❌ System Architecture Pipeline Crash: {str(e)}", ""
 
-# Assemble the layout frame with an Interactive Code Input Box Sandbox
+# Assemble the layout frame interface
 with gr.Blocks(theme=gr.themes.Soft()) as demo:
-    gr.Markdown("# 🧬 Hydra-Git: Autonomous Self-Healing Developer Dashboard")
-    gr.Markdown("*Compliant with Open-Agent Standard architectures running 100% locally via Llama 3.2 (3B) with Live Code Sandbox Inputs.*")
+    gr.Markdown("# 🧬 Hydra-Git: Polyglot Self-Healing Developer Dashboard")
+    gr.Markdown("*Compliant with Open-Agent Standard frameworks running 100% locally via Llama 3.2 (3B) with Multi-Language Compilers.*")
     
     with gr.Row():
         with gr.Column(scale=1):
+            input_lang = gr.Dropdown(
+                label="🌐 Target Project Development Programming Language", 
+                choices=list(LANGUAGE_REGISTRY.keys()), 
+                value="Python"
+            )
             input_code = gr.Textbox(
                 label="💻 Live Sandbox Code Editor (Type or Change Your Problem Here)", 
                 lines=8, 
@@ -125,14 +144,18 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
                 label="🚨 Initial Crash Telemetry / Stack Error Trace", 
                 value="NameError: name 'data_payload' is not defined"
             )
-            submit_btn = gr.Button("Deploy Self-Healing Worker Agent", variant="primary")
+            submit_btn = gr.Button("Deploy Polyglot Self-Healing Worker Agent", variant="primary")
             output_telemetry = gr.Markdown(label="Real-time Compilation Audit Streams")
         
         with gr.Column(scale=1):
             gr.Markdown("### 🔍 Live AI Visual Code Diff Analyzer (Green = Insertions, Red = Deletions)")
             output_diff = gr.HTML(label="Visual Code Patch Telemetry Structure Map")
             
-    submit_btn.click(fn=complete_agent_pipeline, inputs=[input_code, input_error], outputs=[output_telemetry, output_diff])
+    submit_btn.click(
+        fn=complete_agent_pipeline, 
+        inputs=[input_lang, input_code, input_error], 
+        outputs=[output_telemetry, output_diff]
+    )
 
 if __name__ == "__main__":
     demo.launch()
