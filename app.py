@@ -8,7 +8,6 @@ def run_git_cmd(args):
     return subprocess.run(args, capture_output=True, text=True)
 
 def generate_visual_html_diff(old_text, new_text):
-    """Generates clean side-by-side HTML markers highlighting added/deleted lines."""
     dmp = diff_match_patch()
     diffs = dmp.diff_main(old_text, new_text)
     dmp.diff_cleanupSemantic(diffs)
@@ -16,9 +15,9 @@ def generate_visual_html_diff(old_text, new_text):
     html_output = []
     for op, data in diffs:
         text = data.replace('\n', '<br>').replace(' ', '&nbsp;')
-        if op == 1: # Added content code bits
+        if op == 1:
             html_output.append(f"<span style='background-color: #2ea44f33; color: #22863a; font-weight: bold;'>{text}</span>")
-        elif op == -1: # Deleted content code bits
+        elif op == -1:
             html_output.append(f"<span style='background-color: #cb243133; color: #cb2431; text-decoration: line-through;'>{text}</span>")
         else:
             html_output.append(f"<span style='color: #24292e;'>{text}</span>")
@@ -59,9 +58,9 @@ def complete_agent_pipeline(file_name, error_stack):
             cleaned_code = response['message']['content']
             
             if "```python" in cleaned_code:
-                cleaned_code = cleaned_code.split("```python")[1].split("```")[0].strip()
+                cleaned_code = cleaned_code.split("```python").split("```").strip()
             elif "```" in cleaned_code:
-                cleaned_code = cleaned_code.split("```")[1].split("```")[0].strip()
+                cleaned_code = cleaned_code.split("```").split("```").strip()
                 
             with open(file_name, "w", encoding="utf-8") as f:
                 f.write(cleaned_code)
@@ -80,25 +79,31 @@ def complete_agent_pipeline(file_name, error_stack):
             run_git_cmd(["git", "checkout", "main"])
             return f"❌ **Self-Healing Failed.**\n\nLogs:\n" + "\n".join(loop_logs), ""
             
+        # 🧠 NEW WINNING FEATURE: Generate an Explanatory Commit Message via AI
+        commit_prompt = f"Write a 1-sentence engineering git commit message explaining how you fixed this error: {error_stack}. Keep it short and under 60 characters. Do not include quotes."
+        commit_response = ollama.chat(model='llama3.2', messages=[{'role': 'user', 'content': commit_prompt}])
+        ai_commit_msg = f"fix(hydra): {commit_response['message']['content'].strip()}"
+        
+        # Commit with the highly descriptive AI generated summary
         run_git_cmd(["git", "add", file_name])
-        run_git_cmd(["git", "commit", "-m", "feat(hydra): verified self-healing visual code patch complete"])
+        run_git_cmd(["git", "commit", "-m", ai_commit_msg])
+        
         run_git_cmd(["git", "checkout", "main"])
         
-        # Calculate visual HTML highlight changes diff tracking map metrics
         visual_diff_html = generate_visual_html_diff(original_code, current_code)
         formatted_logs = "\n".join(loop_logs)
         
-        telemetry_report = f"### 🚀 SYSTEM SUCCESS STATUS\nVerified clean code changes committed seamlessly in the background.\n\n### 📋 Telemetry Logs:\n{formatted_logs}"
+        telemetry_report = f"### 🚀 SYSTEM SUCCESS STATUS\nVerified clean code changes committed seamlessly in the background.\n\n🔒 **AI Generated Commit Log:** `{ai_commit_msg}`\n\n### 📋 Telemetry Logs:\n{formatted_logs}"
         return telemetry_report, visual_diff_html
         
     except Exception as e:
         run_git_cmd(["git", "checkout", "main"])
         return f"❌ System Architecture Pipeline Crash: {str(e)}", ""
 
-# Assemble the upgraded dual-stream presentation UI frame
+# Assemble the UI canvas frame
 with gr.Blocks(theme=gr.themes.Soft()) as demo:
     gr.Markdown("# 🧬 Hydra-Git: Autonomous Self-Healing Developer Dashboard")
-    gr.Markdown("*Compliant with Open-Agent Standards running 100% locally via Llama 3.2 (3B) with Visual Diff Analyzers.*")
+    gr.Markdown("*Compliant with Open-Agent Standard architectures running 100% locally via Llama 3.2 (3B) with Visual Diff Analyzers.*")
     
     with gr.Row():
         with gr.Column(scale=1):
