@@ -29,7 +29,7 @@ This package strictly satisfies the folder configuration patterns demanded by th
 
 1. **Clone the Project Core:**
    ```bash
-   git clone https://github.com
+   git clone https://github.com/harsimrats-khehra/hydra-git-skill
    cd hydra-git-skill
    ```
 2. **Boot the Local Model Host Engine:**
